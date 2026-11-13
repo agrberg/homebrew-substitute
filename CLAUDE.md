@@ -10,6 +10,8 @@ A Homebrew tap with one Ruby external command, `brew substitute`. Read [ARCHITEC
 
 - `cmd/substitute.rb`: the command and all its modes. The file must stay executable (mode 755) in git.
 - `lib/substitution.rb`: the stub keg logic that both commands share.
+- `test/integration.rb`: the integration tests. They run in a throwaway Homebrew prefix.
+- `.github/workflows/ci.yml`: the style check, and the integration tests on macOS and Linux.
 
 ## Rules for changes
 
@@ -20,7 +22,7 @@ A Homebrew tap with one Ruby external command, `brew substitute`. Read [ARCHITEC
 - `Keg#path` is protected. Use `keg.to_s`.
 - Call `brew` through `Substitution.brew`. It uses `SystemCommand.safe_system`. Plain `safe_system` is not available in a module.
 - Write `typed: strict` Ruby with Sorbet `sig` blocks, in the style of Homebrew's own commands.
-- When behavior changes, update the verification record in ARCHITECTURE.md and the examples in README.md.
+- When behavior changes, add or change a scenario in `test/integration.rb`, and update the verification record in ARCHITECTURE.md and the examples in README.md.
 - Commit with explicit paths. Do not use `git add -A`.
 - Work on a branch and merge through a pull request. Do not commit to `main`. Name branches `ar/<short-description>` in lowercase.
 
@@ -32,13 +34,15 @@ brew style cmd/substitute.rb lib/substitution.rb
 
 `brew style --fix` corrects most layout offenses. It also reflows lines, so read the result. `brew typecheck` does not cover taps.
 
+If this tap is installed, `brew style` also reads the installed copy and reports `Lint/DuplicateMethods` and `Lint/ConstantReassignment` for every method and constant. Ignore those two cops, or skip them with `--except-cops Lint/DuplicateMethods,Lint/ConstantReassignment`. CI installs the tap too, so it skips them.
+
 ## Test procedure
 
-The repo has no automated tests. Testing is manual, in a separate Homebrew prefix. Do not test on the user's real install without their approval.
+`test/integration.rb` runs most checks. A few checks (rollback and Ctrl-C) are manual. Run both in a separate Homebrew prefix. Do not test on the user's real install without their approval.
 
 ### The sandbox
 
-A checkout of Homebrew/brew is a complete prefix. Running `./bin/brew` inside it uses `Cellar`, `opt`, `var` and `Library/Taps` in that checkout, and git ignores them. Clone Homebrew/brew to make one.
+A checkout of Homebrew/brew is a complete prefix. Running `./bin/brew` inside it uses `Cellar`, `opt`, `var` and `Library/Taps` in that checkout, and git ignores them. Clone Homebrew/brew to make one. Do not put it under `/tmp`: brew refuses a prefix in its temporary directory.
 
 Before any command in the sandbox, set the cache and log directories to a scratch location:
 
@@ -48,7 +52,20 @@ export HOMEBREW_CACHE=<scratch>/cache HOMEBREW_LOGS=<scratch>/logs HOMEBREW_NO_A
 
 The sandbox shares `~/Library/Caches/Homebrew` and `~/Library/Logs/Homebrew` with the real install. A `brew cleanup --prune=all` in a sandbox without these variables once deleted 450 real cache and log files. Read a dry run before you run the real command, and never chain them.
 
-### Set up
+### The integration tests
+
+```sh
+HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 <sandbox>/bin/brew ruby test/integration.rb
+```
+
+- Set `HOMEBREW_CACHE` and `HOMEBREW_LOGS` first (see above). The script refuses to run with the default values.
+- The script builds its own tap `substitute-test/probe` and links this repo as `substitute-test/substitute`. It keeps its trust entries in a scratch `XDG_CONFIG_HOME`, and removes the taps and formulae at the end.
+- Name the variables `HOMEBREW_...`. Brew drops other variables before it runs the script. `HOMEBREW_SUBSTITUTE_TEST_ONLY=<text>` runs only the scenarios whose name contains the text.
+- `brew ruby` turns on developer mode, and the `brew substitute` list and `--refresh` read every stub in the prefix. A sandbox with stubs from older tests makes the scenarios fail. Use a fresh clone.
+- Each scenario takes a snapshot of the test formulae in the prefix before a refused command and compares it afterward. Add a snapshot check to every new refusal.
+- To run on Linux, use the `ghcr.io/homebrew/brew` Docker image. Mount this repo read-only, copy it to a new git repository inside the container, and run `brew ruby` on the copy. Docker cannot see files under `/private/tmp`.
+
+### Set up for manual checks
 
 1. Symlink this repo into the sandbox: `ln -s <this repo> <sandbox>/Library/Taps/<user>/homebrew-substitute`.
 2. Trust the command: `./bin/brew trust --command <user>/substitute/substitute`. Trust is global to the user, not per prefix.
@@ -59,16 +76,12 @@ The sandbox shares `~/Library/Caches/Homebrew` and `~/Library/Logs/Homebrew` wit
    - `foo-user2`: a second dependent of `foo`. The pin-error test installs it.
 4. For the library check, make a second set whose original installs a real dylib (`cc -dynamiclib`, with `-install_name` set to `opt_lib/...`). Make the dependent link against it, and make the substitute ship no library. The library check must then refuse.
 
-### What to run
+### What to run by hand
 
-- Happy path: `brew substitute foo-full`, install a new dependent, check that `foo` is not installed, then `brew substitute --remove foo`.
-- Remove modes: `--remove --dry-run` must change nothing. `--remove --no-install` must remove only the stub and the pin. The default must reinstall the original and restore the link states. Also try the refused combinations (`--remove` with `--force`, `--for` or `--refresh`, and `--no-install` without `--remove`).
-- Library check: run the dylib set with `--dry-run` (must print `Would fail` and exit 1), then without it, then with `--force`. Each must refuse before the uninstall. Snapshot kegs, pins and prefix links before and after. The snapshots must be identical, except for the install of the substitute.
+The script covers the happy path, the remove modes, the refusals, the library check, stale stubs, `--refresh`, and `--refresh` before the upgrade. These checks stay manual:
+
 - Rollback: the library check now stops the dylib set, so force the failure. Temporarily make `linkage_ok?` return `false`. Run the swap once with a real original, and once with none (`--remove --no-install` first, and unlink the substitute). Run it a third time with the `opt` link of the substitute moved away, so that `Substitution.create` raises. For the failed reinstall of `--remove`, move the source tarball of the original away. Snapshot before and after each run. The snapshots must be identical. Remove the temporary edit and the moved files afterward.
-- Refusals: a pinned original (`brew pin foo` first, with and without `--dry-run`), version mismatch, a name without `-full` and no `--for`, `--for` with two substitutes, a second substitute for one original. Each must leave the state unchanged.
-- Stale and refresh: add `revision 1` to the original in the tap clone, then run `brew substitute`, `brew outdated` and `brew substitute --refresh`.
-- Stale stub and a dependent: with the stub stale, install `foo-user2`. Brew must print the `brew unpin` error. Run `brew substitute --refresh`, then install again. The install must work.
-- Refresh before upgrade: add `revision 1` to both formulae, and do not upgrade the substitute. `brew substitute` must show `stale`, and `--refresh` must refuse. Run `brew upgrade <substitute>`, then `--refresh`. A revision bump of the substitute alone must show `behind` until the upgrade.
+- Ctrl-C: send SIGINT to the process group before the uninstall finishes, during the linkage test, and during the reinstall of `--remove`. The first two must roll back and exit 130. The third must leave the substitute linked and print the install command.
 - Exit codes: capture them from a file or a variable. A pipe through `grep` hides them.
 
 ### On the real install

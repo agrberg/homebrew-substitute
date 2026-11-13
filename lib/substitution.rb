@@ -30,6 +30,8 @@ module Substitution
   class << self
     sig { returns(T::Array[Stub]) }
     def all
+      return [] unless HOMEBREW_CELLAR.directory?
+
       HOMEBREW_CELLAR.children.select(&:directory?).flat_map do |rack|
         rack.children.filter_map do |version_dir|
           marker = version_dir/MARKER

@@ -1,8 +1,12 @@
 # homebrew-substitute
 
+[![CI](https://github.com/agrberg/homebrew-substitute/actions/workflows/ci.yml/badge.svg)](https://github.com/agrberg/homebrew-substitute/actions/workflows/ci.yml)
+
 `brew substitute` lets you choose which installed formula satisfies a dependency. It is meant for `-full` variants. It affects your machine only, and you are responsible for the result.
 
 Example: you use `ffmpeg-full`, and many formulae declare `depends_on "ffmpeg"`. Without this tap, brew installs the slim `ffmpeg` as well. With this tap, you run `brew substitute ffmpeg-full`. Brew then treats `ffmpeg` as installed, and `ffmpeg-full` serves every dependent.
+
+The tap works on macOS and Linux.
 
 ## Install
 
@@ -13,7 +17,7 @@ brew tap agrberg/substitute
 brew trust --command agrberg/substitute/substitute
 ```
 
-The tap needs a current Homebrew. It was tested with Homebrew 7.0.8. See the Homebrew pages on [taps](https://docs.brew.sh/Taps), [external commands](https://docs.brew.sh/External-Commands) and [tap trust](https://docs.brew.sh/Tap-Trust).
+The tap needs a current Homebrew. The command uses Homebrew internals that can change without notice, so CI runs the tests on macOS and Linux against the current Homebrew for every pull request and every week. See the Homebrew pages on [taps](https://docs.brew.sh/Taps), [external commands](https://docs.brew.sh/External-Commands) and [tap trust](https://docs.brew.sh/Tap-Trust).
 
 ## Use
 
@@ -64,7 +68,28 @@ This is an unsupported change to your own machine. Homebrew maintainers declined
 
 Do not report problems that this tap causes to Homebrew or to formula maintainers. To return to a normal install, run `brew substitute --remove <original>`.
 
-The substitute and the original must have the same version. The library check cannot see a library that a program opens at run time by path. The tool was tested on macOS only, and it handles formulae, not casks. The project has no automated tests.
+The substitute and the original must have the same version. The library check cannot see a library that a program opens at run time by path. The tool handles formulae, not casks.
+
+## Uninstall
+
+Remove every substitution first. Then untap. If you untap first, the stubs and pins stay in your Cellar, and the `brew substitute --remove` command is gone.
+
+```sh
+brew substitute --remove <original>
+brew untap agrberg/substitute
+```
+
+Run the first command once for each original that `brew substitute` lists.
+
+## Develop
+
+The integration tests install and uninstall formulae. Run them only in a throwaway Homebrew prefix. The steps to make one are in [CLAUDE.md](CLAUDE.md). CI runs the same tests on a macOS runner and a Linux runner.
+
+```sh
+brew style cmd/substitute.rb lib/substitution.rb
+HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 HOMEBREW_CACHE=<scratch>/cache HOMEBREW_LOGS=<scratch>/logs \
+  <sandbox>/bin/brew ruby test/integration.rb
+```
 
 ## More
 

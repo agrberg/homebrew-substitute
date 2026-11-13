@@ -131,9 +131,9 @@ Steps 1 to 6 change nothing except the install in step 5. A refusal in step 6 le
 
 The stub cannot exist beside the real original, because both use `Cellar/<original>/<version>` and `opt/<original>`. The test of the stub therefore runs after the uninstall in step 7. A failed test costs a network reinstall of the original. The library check in step 6 avoids that cost.
 
-`Substitution.missing_libraries` reads the load commands of every Mach-O file in each installed dependent, through `Keg#binary_executable_or_library_files`. It keeps each library name under `opt/<original>/` or `Cellar/<original>/`, maps the name to the same path under `opt/<substitute>`, and reports the paths that do not exist. The dependents come from `Formula#runtime_installed_formula_dependents`. `brew uses --installed` calls the same method.
+`Substitution.missing_libraries` reads the library names of every Mach-O or ELF file in each installed dependent, through `Keg#binary_executable_or_library_files`. It keeps each library name under `opt/<original>/` or `Cellar/<original>/`, maps the name to the same path under `opt/<substitute>`, and reports the paths that do not exist. The dependents come from `Formula#runtime_installed_formula_dependents`. `brew uses --installed` calls the same method.
 
-The check does not see a library that a program opens at run time by path, or an extension that a script language loads. Brew resolves each library name to a file that exists, and a name such as `@rpath/...` resolves to nothing. The check works in `swap`, where the real original is still installed. In `--refresh`, `opt/<original>` is the stub, so a library that the substitute lacks may not resolve, and the check can pass. No test ran on Linux.
+The check does not see a library that a program opens at run time by path, or an extension that a script language loads. Brew resolves each library name to a file that exists, and a name such as `@rpath/...` resolves to nothing. The check works in `swap`, where the real original is still installed. In `--refresh`, `opt/<original>` is the stub, so a library that the substitute lacks may not resolve, and the check can pass. On Linux, a dependent names a library such as `libsublib.so`, and brew resolves the name through the runpath of the file to `opt/<original>/lib`, so the check works there too.
 
 `--refresh` runs the version, `behind` and library checks for every stale stub before it changes any stub. One refusal leaves all stubs as they were.
 
@@ -176,10 +176,13 @@ The version check compares formula files. The stub points at the installed subst
 
 ## Verification record
 
-Tests ran in a separate Homebrew prefix with throwaway source-built formulae, and by hand on one real install.
+`test/integration.rb` runs the checks marked "automated" in a separate Homebrew prefix with throwaway source-built formulae. CI runs it on macOS and Linux. The other checks ran by hand in such a prefix, and on one real install.
 
 | Check | Result |
 |---|---|
+| Automated: the whole script, on macOS (a clone of Homebrew/brew) and on Linux (Homebrew 7.0.13 in Docker) | Every check passes on both. |
+| Automated: `brew substitute` in a prefix that has no Cellar | Prints `No substitutions.` and exits 0. |
+| Automated: the library check on Linux | A dependent that loads `libsublib.so` through `opt/<original>` makes the check refuse, with `--dry-run`, without it and with `--force`. The substitute with the library is accepted. |
 | A fresh dependent installs without installing the original | Pass |
 | `brew uninstall <original>` on the stub, unpinned | Removes only the stub. The substitute keeps all files. |
 | `brew uninstall <original>` on the stub, pinned | Refused |
@@ -220,8 +223,8 @@ Tests ran in a separate Homebrew prefix with throwaway source-built formulae, an
 - A real bottle install of a new dependent. The sandbox cannot pour bottles.
 - A full cycle on the real install in which the original and the substitute both get a new version.
 - `brew doctor`.
-- Automated tests. The test procedure is in `CLAUDE.md`.
+- Automated tests of the rollback paths and of Ctrl-C. These ran by hand. The test procedure is in `CLAUDE.md`.
 - Casks. The commands handle formulae only.
-- Linux. All tests ran on macOS.
+- A Homebrew older than the current one. The automated tests run on the current Homebrew only.
 - A library that a program opens at run time by path. The library check reads only load commands.
 - A dependent that was broken before the swap. The linkage test after the swap cannot tell this case from a swap failure.
