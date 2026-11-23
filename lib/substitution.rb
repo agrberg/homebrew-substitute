@@ -109,7 +109,7 @@ module Substitution
         end
         (stub_dir/MARKER).make_relative_symlink(substitute.opt_prefix)
         Keg.new(stub_dir).optlink
-        FormulaPin.new(original).pin_at(original.pkg_version)
+        FormulaPin.new(original).pin
       rescue StandardError, Interrupt
         discard(original, stub_dir) unless existed
         raise
