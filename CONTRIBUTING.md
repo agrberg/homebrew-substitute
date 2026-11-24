@@ -1,6 +1,6 @@
 # Contributing
 
-Read [ARCHITECTURE.md](ARCHITECTURE.md) before you change behavior. Run `brew ruby test/style.rb` before you push. The integration tests below run in a separate Homebrew prefix.
+Read [ARCHITECTURE.md](ARCHITECTURE.md) before you change behavior. Run `./bin/style` before you push. The integration tests below run in a separate Homebrew prefix.
 
 ## Test procedure
 

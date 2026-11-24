@@ -88,7 +88,7 @@ Run the first command once for each original that `brew substitute` lists.
 The integration tests install and uninstall formulae. Run them only in a throwaway Homebrew prefix. The steps to make one are in [CONTRIBUTING.md](CONTRIBUTING.md). CI runs the same tests on a macOS runner and a Linux runner.
 
 ```sh
-brew ruby test/style.rb
+./bin/style
 HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 HOMEBREW_CACHE=<scratch>/cache HOMEBREW_LOGS=<scratch>/logs \
   <sandbox>/bin/brew ruby test/integration.rb
 ```
