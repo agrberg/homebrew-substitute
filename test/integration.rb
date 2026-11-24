@@ -91,8 +91,8 @@ end
 @revisions = Hash.new(0)
 @archives = {}
 
-def brew(*args)
-  output, status = Open3.capture2e(BREW, *args)
+def brew(*args, env: {})
+  output, status = Open3.capture2e(env, BREW, *args)
   # A process that a signal kills has no exit status. Use the shell convention of 128 plus the signal number.
   Result.new(output, status.exitstatus || (128 + status.termsig))
 end
@@ -478,6 +478,8 @@ scenario "linkage test output" do
         !Substitution.only_substitute_undeclared?("#{undeclared}Broken dependencies:\n  /x/lib.dylib (y)\n", names)
   check "refuses a run that stopped with an error",
         !Substitution.only_substitute_undeclared?("#{undeclared}Error: Permission denied\n", names)
+  check "refuses a run that stopped with a colored error",
+        !Substitution.only_substitute_undeclared?("#{undeclared}\e[31mError:\e[0m Permission denied\n", names)
   check "refuses output with no finding", !Substitution.only_substitute_undeclared?("", names)
   check "accepts the substitute alone with exit status 1",
         Substitution.expected_linkage_failure?(1, undeclared, names)
@@ -511,6 +513,21 @@ scenario "library check" do
   accepted = brew("substitute", "sublib-good", "--for=sublib")
   check_exit "a substitute with the library", accepted, 0
   check "the stub replaces the original", stub?("sublib", "1.0") && !real_keg?("sublib", "1.0"), accepted.output
+end
+
+# `brew linkage` prints a developer-mode notice on a user's first developer command. It must not reach the parser.
+scenario "swap on the first developer command" do
+  config = File.join(ENV.fetch("HOMEBREW_REPOSITORY"), ".git", "config")
+  not_developer = { "HOMEBREW_DEVELOPER" => nil, "HOMEBREW_DEV_CMD_RUN" => nil }
+  brew!("install", "sublib", "sublib-user", "sublib-full")
+  system("git", "config", "--file", config, "--unset-all", "homebrew.devcmdrun")
+
+  swap = brew("substitute", "sublib-good", "--for=sublib", env: not_developer)
+  check_exit "swap", swap, 0
+  check "the stub replaces the original", stub?("sublib", "1.0") && !real_keg?("sublib", "1.0"), swap.output
+  check "the notice does not appear", swap.output.exclude?("developer mode"), swap.output
+ensure
+  system("git", "config", "--file", config, "homebrew.devcmdrun", "true") if config
 end
 
 tear_down

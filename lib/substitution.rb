@@ -98,7 +98,7 @@ module Substitution
     # An `Error:` line means that the run stopped early, so later dependents were not tested.
     sig { params(output: String, substitute_names: T::Array[String]).returns(T::Boolean) }
     def only_substitute_undeclared?(output, substitute_names)
-      lines = output.lines(chomp: true)
+      lines = Tty.strip_ansi(output).lines(chomp: true)
       return false if lines.any? { |line| line.start_with?("Error:") }
       return false if lines.grep(FINDING_HEADER).uniq != [UNDECLARED_HEADER]
 

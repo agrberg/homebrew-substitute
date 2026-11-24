@@ -183,6 +183,8 @@ The version check compares formula files. The stub points at the installed subst
 | Automated: the whole script, on macOS (a clone of Homebrew/brew) and on Linux (Homebrew 7.0.13 in Docker) | Every check passes on both. |
 | Automated: `brew substitute` in a prefix that has no Cellar | Prints `No substitutions.` and exits 0. |
 | Automated: the library check on Linux | A dependent that loads `libsublib.so` through `opt/<original>` makes the check refuse, with `--dry-run`, without it and with `--force`. The substitute with the library is accepted. |
+| Automated: the parser of the `brew linkage --test` output | The substitute as the only undeclared dependency is accepted, also for two dependents. Another undeclared dependency, a second kind of finding, an `Error:` line (also with color codes) and output with no finding are refused. |
+| Automated: the first developer command of a user (`homebrew.devcmdrun` unset, `HOMEBREW_DEVELOPER` unset) | The swap succeeds and the developer-mode notice of `brew linkage` stays out of the output. Without `HOMEBREW_DEV_CMD_RUN` for the child process, the notice made the swap roll back. |
 | A fresh dependent installs without installing the original | Pass |
 | `brew uninstall <original>` on the stub, unpinned | Removes only the stub. The substitute keeps all files. |
 | `brew uninstall <original>` on the stub, pinned | Refused |

@@ -295,7 +295,8 @@ module Homebrew
 
         output = +""
         command = [HOMEBREW_BREW_FILE.to_s, "linkage", "--test", *dependents.map(&:full_name)]
-        status = Open3.popen2e(*command) do |stdin, lines, thread|
+        # On a user's first developer command, brew prints a notice that looks like a finding. This variable stops it.
+        status = Open3.popen2e({ "HOMEBREW_DEV_CMD_RUN" => "1" }, *command) do |stdin, lines, thread|
           stdin.close
           lines.each_line do |line|
             print line
