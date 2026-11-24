@@ -19,8 +19,6 @@ jobs:
     env:
       HOMEBREW_DEVELOPER: "1"
     steps:
-      # setup-homebrew fetches this repository as a tap. A private repository needs a token for that fetch.
-      - run: git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
       - uses: Homebrew/actions/setup-homebrew@6b24903f05b5c95b9a56dae6257b9f6f535a3c48 # main
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,11 +47,7 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest]
     steps:
-      # setup-homebrew fetches this repository as a tap. A private repository needs a token for that fetch.
-      - run: git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
       - uses: Homebrew/actions/setup-homebrew@6b24903f05b5c95b9a56dae6257b9f6f535a3c48 # main
-      # On macOS, checkout hangs in its fetch while the rewrite is active.
-      - run: git config --global --remove-section url."https://x-access-token:${{ github.token }}@github.com/"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
