@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "abstract_command"
+require "open3"
 require_relative "../lib/substitution"
 
 module Homebrew
@@ -110,9 +111,15 @@ module Homebrew
         return ohai "No stale substitutions." if stale.empty?
 
         pairs = stale.map { |stub| [stub, Formulary.factory(stub.original), Formulary.factory(stub.substitute)] }
-        check_refreshable(pairs)
+        # Every read-only check runs before the first change, so one refusal leaves all stubs as they were.
+        pairs.each do |_stub, original, substitute|
+          check_compatible(original, substitute)
+          check_libraries(original, substitute, original.runtime_installed_formula_dependents,
+                          args.dry_run? ? "Would fail" : "Cannot refresh")
+        end
 
-        pairs.each do |stub, original, substitute|
+        # The checks above must all pass before the first change.
+        pairs.each do |stub, original, substitute| # rubocop:disable Style/CombinableLoops
           next ohai "Would re-point #{original.name} from #{stub.version} to #{original.pkg_version}" if args.dry_run?
 
           Substitution.remove(stub)
@@ -124,16 +131,6 @@ module Homebrew
             raise
           end
           ohai "Re-pointed #{original.name} to #{original.pkg_version}"
-        end
-      end
-
-      # Every read-only check runs before the first change, so one refusal leaves all stubs as they were.
-      sig { params(pairs: T::Array[[Substitution::Stub, Formula, Formula]]).void }
-      def check_refreshable(pairs)
-        pairs.each do |_stub, original, substitute|
-          check_compatible(original, substitute)
-          check_libraries(original, substitute, original.runtime_installed_formula_dependents,
-                          args.dry_run? ? "Would fail" : "Cannot refresh")
         end
       end
 
@@ -175,7 +172,23 @@ module Homebrew
         refuse_pinned(original)
         check_compatible(original, substitute)
         dependents = original.runtime_installed_formula_dependents
-        return preview(original, substitute, dependents) if args.dry_run?
+        if args.dry_run?
+          ohai "Would install #{substitute.name}" unless substitute.any_version_installed?
+          unless Substitution.real_kegs(original).empty?
+            ohai "Would uninstall #{original.name} with --ignore-dependencies"
+          end
+          ohai "Would create a stub keg for #{original.name} #{original.pkg_version} " \
+               "that points to #{substitute.name}"
+          ohai "Would pin #{original.name}"
+          ohai "Would link #{substitute.name}"
+          ohai "Would run `brew linkage --test` on the dependents of #{original.name}"
+          if substitute.any_version_installed?
+            check_libraries(original, substitute, dependents, "Would fail")
+          else
+            opoo "Cannot check the libraries of #{substitute.name} until it is installed."
+          end
+          return
+        end
 
         real_kegs = Substitution.real_kegs(original)
         original_linked = real_kegs.any?(&:linked?)
@@ -193,11 +206,12 @@ module Homebrew
           ohai "Substituting #{substitute.name} for #{original.name}"
           Substitution.create(original, substitute)
           link(substitute)
-          return if linkage_ok?(dependents)
+          return if linkage_ok?(dependents, substitute)
 
           opoo "The linkage test failed. Rolling back."
         rescue StandardError, Interrupt => e
-          opoo "The substitution failed (#{e.message.strip.delete_suffix(".").presence || e.class}). Rolling back."
+          reason = e.message.strip.delete_suffix(".").presence || e.class
+          opoo "The substitution failed (#{reason}). Rolling back."
           roll_back(original, substitute, real_kegs, original_linked:, substitute_linked:)
           raise
         end
@@ -253,28 +267,6 @@ module Homebrew
         EOS
       end
 
-      sig { params(original: Formula, substitute: Formula, dependents: T::Array[Formula]).void }
-      def preview(original, substitute, dependents)
-        print_plan(original, substitute)
-        if substitute.any_version_installed?
-          check_libraries(original, substitute, dependents, "Would fail")
-        else
-          opoo "Cannot check the libraries of #{substitute.name} until it is installed."
-        end
-      end
-
-      sig { params(original: Formula, substitute: Formula).void }
-      def print_plan(original, substitute)
-        ohai "Would install #{substitute.name}" unless substitute.any_version_installed?
-        unless Substitution.real_kegs(original).empty?
-          ohai "Would uninstall #{original.name} with --ignore-dependencies"
-        end
-        ohai "Would create a stub keg for #{original.name} #{original.pkg_version} that points to #{substitute.name}"
-        ohai "Would pin #{original.name}"
-        ohai "Would link #{substitute.name}"
-        ohai "Would run `brew linkage --test` on the dependents of #{original.name}"
-      end
-
       sig { params(substitute: Formula).void }
       def link(substitute)
         return if substitute.linked?
@@ -285,11 +277,33 @@ module Homebrew
       end
 
       # `Substitution.brew` raises on failure. This check needs the exit status as a boolean.
-      sig { params(dependents: T::Array[Formula]).returns(T::Boolean) }
-      def linkage_ok?(dependents)
+      # Homebrew `master` since 23 Nov 2026 (commit eb09617, after the 7.0.16 release) makes `brew linkage --test`
+      # fail on an undeclared dependency. A dependent that linked the library of its original now links the
+      # substitute, so that one finding is expected.
+      sig { params(dependents: T::Array[Formula], substitute: Formula).returns(T::Boolean) }
+      def linkage_ok?(dependents, substitute)
         return true if dependents.empty?
 
-        system(HOMEBREW_BREW_FILE.to_s, "linkage", "--test", *dependents.map(&:full_name)) || false
+        output = +""
+        command = [HOMEBREW_BREW_FILE.to_s, "linkage", "--test", *dependents.map(&:full_name)]
+        # On a user's first developer command, brew prints a notice that looks like a finding. This variable stops it.
+        status = Open3.popen2e({ "HOMEBREW_DEV_CMD_RUN" => "1" }, *command) do |stdin, lines, thread|
+          stdin.close
+          lines.each_line do |line|
+            print line
+            output << line
+          end
+          thread.value
+        end
+        return true if status.success?
+
+        substitute_names = [substitute.name, substitute.full_name]
+        expected = Substitution.expected_linkage_failure?(status.exitstatus, output, substitute_names)
+        return false unless expected
+
+        ohai "The linkage test lists #{substitute.name} as an undeclared dependency. This is expected, so the " \
+             "substitution stays."
+        true
       end
     end
   end

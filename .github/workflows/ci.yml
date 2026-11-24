@@ -16,6 +16,8 @@ jobs:
   style:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      HOMEBREW_DEVELOPER: "1"
     steps:
       # setup-homebrew fetches this repository as a tap. A private repository needs a token for that fetch.
       - run: git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
@@ -23,13 +25,25 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # setup-homebrew installs this tap, so rubocop reads each file twice.
-      - run: brew style --except-cops Lint/DuplicateMethods,Lint/ConstantReassignment cmd/substitute.rb lib/substitution.rb
+      - run: brew config
+      - run: brew ruby test/style.rb
+      - name: Check that the style check fails on an offense
+        run: |
+          printf "puts   %s\n" "\"canary\"" > lib/canary.rb
+          if output=$(brew ruby test/style.rb -- lib/canary.rb 2>&1); then
+            echo "$output"
+            echo "The style check passed a file with offenses."
+            exit 1
+          fi
+          echo "$output"
+          echo "$output" | grep -q "lib/canary.rb:" || { echo "The style check failed for another reason."; exit 1; }
 
   integration:
     name: integration (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      HOMEBREW_DEVELOPER: "1"
     strategy:
       fail-fast: false
       matrix:

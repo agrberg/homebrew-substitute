@@ -122,7 +122,7 @@ For each substitute, `brew substitute` does these steps:
 7. Uninstall the real original with `--ignore-dependencies`. If a real keg of the original remains, raise an error, so that the rollback runs.
 8. Create the stub, link `opt/<original>` to it, and pin the original.
 9. Link the substitute with `brew link --force`. A failure here prints a warning and continues.
-10. Run `brew linkage --test` on every installed dependent of the original. This step is the safety net for the library check.
+10. Run `brew linkage --test` on every installed dependent of the original. This step is the safety net for the library check. Homebrew `master` since 23 Nov 2026 (commit eb09617, after the 7.0.16 release) fails the test for an "undeclared dependency", and a dependent that links the library of its original now links the substitute. CI installs Homebrew from `master`, so CI sees this first. The command accepts that one finding, and only when the substitute is the only entry listed, the exit status is 1, and the output has no `Error:` line. Older releases do not fail the test, so the command works on both.
 11. If the linkage test fails, or if step 7, 8 or 10 raises an error or receives Ctrl-C, roll back. A failure in step 9 prints a warning and does not roll back. Remove the stub and the pin. Reinstall the original, or, if the original was not installed, restore the link state of the substitute. Then exit with an error.
 
 Steps 1 to 6 change nothing except the install in step 5. A refusal in step 6 leaves the original in place and the substitute installed.
@@ -183,6 +183,8 @@ The version check compares formula files. The stub points at the installed subst
 | Automated: the whole script, on macOS (a clone of Homebrew/brew) and on Linux (Homebrew 7.0.13 in Docker) | Every check passes on both. |
 | Automated: `brew substitute` in a prefix that has no Cellar | Prints `No substitutions.` and exits 0. |
 | Automated: the library check on Linux | A dependent that loads `libsublib.so` through `opt/<original>` makes the check refuse, with `--dry-run`, without it and with `--force`. The substitute with the library is accepted. |
+| Automated: the parser of the `brew linkage --test` output | The substitute as the only undeclared dependency is accepted, also for two dependents. Another undeclared dependency, a second kind of finding, an `Error:` line (also with color codes) and output with no finding are refused. |
+| Automated: the first developer command of a user (`homebrew.devcmdrun` unset, `HOMEBREW_DEVELOPER` unset) | The swap succeeds and the developer-mode notice of `brew linkage` stays out of the output. Without `HOMEBREW_DEV_CMD_RUN` for the child process, the notice made the swap roll back. |
 | A fresh dependent installs without installing the original | Pass |
 | `brew uninstall <original>` on the stub, unpinned | Removes only the stub. The substitute keeps all files. |
 | `brew uninstall <original>` on the stub, pinned | Refused |
@@ -200,7 +202,7 @@ The version check compares formula files. The stub points at the installed subst
 | Stale stub, then install a dependent | Brew prints the `brew unpin` error. After `brew substitute --refresh`, the install works. |
 | The original formula cannot load | Status `unknown`. `--refresh` skips the stub. |
 | The substitute formula file is gone, and the substitute is installed | Status `ok`. Brew loads the formula from the `.brew` directory of the installed keg. |
-| `--refresh`, the new substitute lacks a library (`--dry-run` and real run) | Refused with `Would fail` or `Cannot refresh` and the missing path. The state does not change. |
+| `--refresh`, the new substitute lacks a library (`--dry-run` and real run) | Refused with `Would fail` or `Cannot refresh` and the missing path. The state does not change. On Linux, Homebrew reports a library that is not on disk by its bare name, such as `libsublib.so`. The check tries that name against each rpath of the file. |
 | `--refresh`, `Substitution.create` raises after the old stub is removed | The message gives `brew substitute <substitute> --for=<original>`. That command creates the stub again. |
 | `Substitution.create` raises after the pin and the `opt` link exist | The stub, the pin and the `opt` link are gone. The state matches the state before the command. |
 | The reinstall of the original fails in the rollback of `swap` | The stub and the pin are gone, the substitute stays linked, and a message gives the install command. |
@@ -223,7 +225,7 @@ The version check compares formula files. The stub points at the installed subst
 - A real bottle install of a new dependent. The sandbox cannot pour bottles.
 - A full cycle on the real install in which the original and the substitute both get a new version.
 - `brew doctor`.
-- Automated tests of the rollback paths and of Ctrl-C. These ran by hand. The test procedure is in `CLAUDE.md`.
+- Automated tests of the rollback paths and of Ctrl-C. These ran by hand. The test procedure is in `CONTRIBUTING.md`.
 - Casks. The commands handle formulae only.
 - A Homebrew older than the current one. The automated tests run on the current Homebrew only.
 - A library that a program opens at run time by path. The library check reads only load commands.

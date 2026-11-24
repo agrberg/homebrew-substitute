@@ -2,8 +2,8 @@
 # frozen_string_literal: true
 
 # Integration tests for `brew substitute`. They install and uninstall real formulae, so they run only in a
-# disposable Homebrew prefix: the sandbox in CLAUDE.md, or a CI runner. Run them through `brew ruby`, so that they
-# use Homebrew's Ruby:
+# disposable Homebrew prefix: the sandbox in CONTRIBUTING.md, or a CI runner. Run them through `brew ruby`, so that
+# they use Homebrew's Ruby:
 #
 #   HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 HOMEBREW_CACHE=<scratch>/cache HOMEBREW_LOGS=<scratch>/logs \
 #     <sandbox>/bin/brew ruby test/integration.rb
@@ -14,6 +14,7 @@ require "digest"
 require "fileutils"
 require "open3"
 require "tmpdir"
+require_relative "../lib/substitution"
 
 if ENV["HOMEBREW_SUBSTITUTE_TEST_SANDBOX"] != "1"
   abort "These tests uninstall formulae. Set HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 to confirm that this prefix " \
@@ -90,8 +91,8 @@ end
 @revisions = Hash.new(0)
 @archives = {}
 
-def brew(*args)
-  output, status = Open3.capture2e(BREW, *args)
+def brew(*args, env: {})
+  output, status = Open3.capture2e(env, BREW, *args)
   # A process that a signal kills has no exit status. Use the shell convention of 128 plus the signal number.
   Result.new(output, status.exitstatus || (128 + status.termsig))
 end
@@ -104,7 +105,8 @@ def brew!(*args)
 end
 
 def check(label, condition, detail = nil)
-  puts "  #{condition ? "ok  " : "FAIL"} #{label}"
+  status = condition ? "ok  " : "FAIL"
+  puts "  #{status} #{label}"
   return if condition
 
   puts detail.to_s.gsub(/^/, "         ") unless detail.to_s.empty?
@@ -144,12 +146,14 @@ end
 
 def formula_source(name, spec)
   archive = @archives.fetch(spec.fetch(:tarball))
+  class_name = name.split("-").map(&:capitalize).join
+  checksum = Digest::SHA256.file(archive).hexdigest
   lines = [
-    "class #{name.split("-").map(&:capitalize).join} < Formula",
+    "class #{class_name} < Formula",
     '  desc "Test fixture"',
     '  homepage "https://example.invalid"',
     %Q(  url "file://#{archive}"),
-    %Q(  sha256 "#{Digest::SHA256.file(archive).hexdigest}"),
+    %Q(  sha256 "#{checksum}"),
   ]
   lines << "  revision #{@revisions[name]}" if @revisions[name].positive?
   lines << "  keg_only :versioned_formula" if spec[:keg_only]
@@ -464,6 +468,30 @@ scenario "substitute-only revision shows behind" do
   check_output "list after the upgrade", brew("substitute"), "subtest -> subtest-full (1.0, ok)"
 end
 
+scenario "linkage test output" do
+  names = %w[sublib-good substitute-test/probe/sublib-good]
+  undeclared = "==> Checking sublib-user linkage\nUndeclared dependencies with linkage:\n  sublib-good\n"
+  check "accepts the substitute alone", Substitution.only_substitute_undeclared?(undeclared, names)
+  check "accepts the substitute alone for two dependents",
+        Substitution.only_substitute_undeclared?("#{undeclared}==> Checking sublib-user2 linkage\n" \
+                                                 "Undeclared dependencies with linkage:\n  sublib-good\n", names)
+  check "refuses another undeclared dependency",
+        !Substitution.only_substitute_undeclared?("#{undeclared}  other\n", names)
+  check "refuses a second kind of finding",
+        !Substitution.only_substitute_undeclared?("#{undeclared}Broken dependencies:\n  /x/lib.dylib (y)\n", names)
+  check "refuses a run that stopped with an error",
+        !Substitution.only_substitute_undeclared?("#{undeclared}Error: Permission denied\n", names)
+  check "refuses a run that stopped with a colored error",
+        !Substitution.only_substitute_undeclared?("#{undeclared}\e[31mError:\e[0m Permission denied\n", names)
+  check "refuses output with no finding", !Substitution.only_substitute_undeclared?("", names)
+  check "accepts the substitute alone with exit status 1",
+        Substitution.expected_linkage_failure?(1, undeclared, names)
+  check "refuses the substitute alone after a kill (137)",
+        !Substitution.expected_linkage_failure?(137, undeclared, names)
+  check "refuses the substitute alone with no exit status",
+        !Substitution.expected_linkage_failure?(nil, undeclared, names)
+end
+
 scenario "library check" do
   library = MACOS ? "libsublib.dylib" : "libsublib.so"
   brew!("install", "sublib", "sublib-user", "sublib-full")
@@ -488,6 +516,47 @@ scenario "library check" do
   accepted = brew("substitute", "sublib-good", "--for=sublib")
   check_exit "a substitute with the library", accepted, 0
   check "the stub replaces the original", stub?("sublib", "1.0") && !real_keg?("sublib", "1.0"), accepted.output
+end
+
+# `brew linkage` prints a developer-mode notice on a user's first developer command. It must not reach the parser.
+scenario "swap on the first developer command" do
+  config = File.join(ENV.fetch("HOMEBREW_REPOSITORY"), ".git", "config")
+  not_developer = { "HOMEBREW_DEVELOPER" => nil, "HOMEBREW_DEV_CMD_RUN" => nil }
+  brew!("install", "sublib", "sublib-user", "sublib-full")
+  system("git", "config", "--file", config, "--unset-all", "homebrew.devcmdrun")
+
+  swap = brew("substitute", "sublib-good", "--for=sublib", env: not_developer)
+  check_exit "swap", swap, 0
+  check "the stub replaces the original", stub?("sublib", "1.0") && !real_keg?("sublib", "1.0"), swap.output
+  check "the notice does not appear", swap.output.exclude?("developer mode"), swap.output
+ensure
+  system("git", "config", "--file", config, "homebrew.devcmdrun", "true") if config
+end
+
+scenario "library check on refresh" do
+  library = MACOS ? "libsublib.dylib" : "libsublib.so"
+  brew!("install", "sublib", "sublib-user", "sublib-full")
+  brew!("substitute", "sublib-good", "--for=sublib")
+
+  # The new revision of the substitute ships no library, so the refresh must refuse.
+  bump_revision("sublib")
+  @revisions["sublib-good"] += 1
+  no_library_spec = FORMULAE.fetch("sublib-full").merge(install: "bin.install \"subtest\" => \"sublib-good\"")
+  no_library = formula_source("sublib-good", no_library_spec)
+  File.write(File.join(PROBE_FORMULAE, "sublib-good.rb"), no_library)
+  brew!("upgrade", "sublib-good")
+  stale = snapshot
+
+  dry_run = brew("substitute", "--refresh", "--dry-run")
+  check_exit "--refresh --dry-run", dry_run, 1
+  check_output "--refresh --dry-run", dry_run, "Would fail"
+  check_unchanged "--refresh --dry-run", stale
+
+  refusal = brew("substitute", "--refresh")
+  check_exit "--refresh without the library", refusal, 1
+  check_output "--refresh without the library", refusal, "Cannot refresh"
+  check_output "--refresh without the library", refusal, library
+  check_unchanged "--refresh without the library", stale
 end
 
 tear_down

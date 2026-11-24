@@ -1,0 +1,3 @@
+#!/bin/sh
+# Without HOMEBREW_DEVELOPER, `brew ruby` turns developer mode on for good. This keeps it on for this run only.
+HOMEBREW_DEVELOPER=1 exec brew ruby "$(dirname "$0")/../test/style.rb" -- "$@"
