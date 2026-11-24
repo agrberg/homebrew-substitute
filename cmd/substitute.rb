@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "abstract_command"
+require "open3"
 require_relative "../lib/substitution"
 
 module Homebrew
@@ -193,7 +194,7 @@ module Homebrew
           ohai "Substituting #{substitute.name} for #{original.name}"
           Substitution.create(original, substitute)
           link(substitute)
-          return if linkage_ok?(dependents)
+          return if linkage_ok?(dependents, substitute)
 
           opoo "The linkage test failed. Rolling back."
         rescue StandardError, Interrupt => e
@@ -285,11 +286,32 @@ module Homebrew
       end
 
       # `Substitution.brew` raises on failure. This check needs the exit status as a boolean.
-      sig { params(dependents: T::Array[Formula]).returns(T::Boolean) }
-      def linkage_ok?(dependents)
+      # Homebrew `master` since 23 Nov 2026 (commit eb09617, after the 7.0.16 release) makes `brew linkage --test`
+      # fail on an undeclared dependency. A dependent that linked the library of its original now links the
+      # substitute, so that one finding is expected.
+      sig { params(dependents: T::Array[Formula], substitute: Formula).returns(T::Boolean) }
+      def linkage_ok?(dependents, substitute)
         return true if dependents.empty?
 
-        system(HOMEBREW_BREW_FILE.to_s, "linkage", "--test", *dependents.map(&:full_name)) || false
+        output = +""
+        command = [HOMEBREW_BREW_FILE.to_s, "linkage", "--test", *dependents.map(&:full_name)]
+        status = Open3.popen2e(*command) do |stdin, lines, thread|
+          stdin.close
+          lines.each_line do |line|
+            print line
+            output << line
+          end
+          thread.value
+        end
+        return true if status.success?
+
+        substitute_names = [substitute.name, substitute.full_name]
+        expected = Substitution.expected_linkage_failure?(status.exitstatus, output, substitute_names)
+        return false unless expected
+
+        ohai "The linkage test lists #{substitute.name} as an undeclared dependency. This is expected, so the " \
+             "substitution stays."
+        true
       end
     end
   end

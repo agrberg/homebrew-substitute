@@ -14,6 +14,7 @@ require "digest"
 require "fileutils"
 require "open3"
 require "tmpdir"
+require_relative "../lib/substitution"
 
 if ENV["HOMEBREW_SUBSTITUTE_TEST_SANDBOX"] != "1"
   abort "These tests uninstall formulae. Set HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 to confirm that this prefix " \
@@ -462,6 +463,28 @@ scenario "substitute-only revision shows behind" do
   check_output "list", brew("substitute"), "subtest -> subtest-full (1.0, behind)"
   brew!("upgrade", "subtest-full")
   check_output "list after the upgrade", brew("substitute"), "subtest -> subtest-full (1.0, ok)"
+end
+
+scenario "linkage test output" do
+  names = %w[sublib-good substitute-test/probe/sublib-good]
+  undeclared = "==> Checking sublib-user linkage\nUndeclared dependencies with linkage:\n  sublib-good\n"
+  check "accepts the substitute alone", Substitution.only_substitute_undeclared?(undeclared, names)
+  check "accepts the substitute alone for two dependents",
+        Substitution.only_substitute_undeclared?("#{undeclared}==> Checking sublib-user2 linkage\n" \
+                                                 "Undeclared dependencies with linkage:\n  sublib-good\n", names)
+  check "refuses another undeclared dependency",
+        !Substitution.only_substitute_undeclared?("#{undeclared}  other\n", names)
+  check "refuses a second kind of finding",
+        !Substitution.only_substitute_undeclared?("#{undeclared}Broken dependencies:\n  /x/lib.dylib (y)\n", names)
+  check "refuses a run that stopped with an error",
+        !Substitution.only_substitute_undeclared?("#{undeclared}Error: Permission denied\n", names)
+  check "refuses output with no finding", !Substitution.only_substitute_undeclared?("", names)
+  check "accepts the substitute alone with exit status 1",
+        Substitution.expected_linkage_failure?(1, undeclared, names)
+  check "refuses the substitute alone after a kill (137)",
+        !Substitution.expected_linkage_failure?(137, undeclared, names)
+  check "refuses the substitute alone with no exit status",
+        !Substitution.expected_linkage_failure?(nil, undeclared, names)
 end
 
 scenario "library check" do

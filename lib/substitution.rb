@@ -18,6 +18,10 @@ module Substitution
 
   MARKER = ".substituted-by"
   SKIPPED_ENTRIES = %w[INSTALL_RECEIPT.json sbom.spdx.json .brew].freeze
+  UNDECLARED_HEADER = "Undeclared dependencies with linkage:"
+  FINDING_HEADER = /\A[A-Z][^:]*:\z/ # https://regexper.com/#%5E%5BA-Z%5D%5B%5E%3A%5D*%3A%24
+  FINDING_ENTRY = /\A\s+\S+\z/ # https://regexper.com/#%5E%5Cs%2B%5CS%2B%24
+  private_constant :UNDECLARED_HEADER, :FINDING_HEADER, :FINDING_ENTRY
 
   # One installed stub keg: `original` is satisfied by `substitute` at `version`.
   class Stub < T::Struct
@@ -89,6 +93,23 @@ module Substitution
         missing[dependent.name] = gone.map(&:to_s) unless gone.empty?
       end
       missing
+    end
+
+    # An `Error:` line means that the run stopped early, so later dependents were not tested.
+    sig { params(output: String, substitute_names: T::Array[String]).returns(T::Boolean) }
+    def only_substitute_undeclared?(output, substitute_names)
+      lines = output.lines(chomp: true)
+      return false if lines.any? { |line| line.start_with?("Error:") }
+      return false if lines.grep(FINDING_HEADER).uniq != [UNDECLARED_HEADER]
+
+      lines.grep(FINDING_ENTRY).map(&:strip).all? { |name| substitute_names.include?(name) }
+    end
+
+    # Exit status 1 is how `brew linkage --test` reports a finding. A killed run has another status or none, and it
+    # tested only some dependents.
+    sig { params(code: T.nilable(Integer), output: String, names: T::Array[String]).returns(T::Boolean) }
+    def expected_linkage_failure?(code, output, names)
+      code == 1 && only_substitute_undeclared?(output, names)
     end
 
     sig { params(original: Formula).returns(T::Array[Keg]) }

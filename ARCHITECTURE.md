@@ -122,7 +122,7 @@ For each substitute, `brew substitute` does these steps:
 7. Uninstall the real original with `--ignore-dependencies`. If a real keg of the original remains, raise an error, so that the rollback runs.
 8. Create the stub, link `opt/<original>` to it, and pin the original.
 9. Link the substitute with `brew link --force`. A failure here prints a warning and continues.
-10. Run `brew linkage --test` on every installed dependent of the original. This step is the safety net for the library check.
+10. Run `brew linkage --test` on every installed dependent of the original. This step is the safety net for the library check. Homebrew `master` since 23 Nov 2026 (commit eb09617, after the 7.0.16 release) fails the test for an "undeclared dependency", and a dependent that links the library of its original now links the substitute. CI installs Homebrew from `master`, so CI sees this first. The command accepts that one finding, and only when the substitute is the only entry listed, the exit status is 1, and the output has no `Error:` line. Older releases do not fail the test, so the command works on both.
 11. If the linkage test fails, or if step 7, 8 or 10 raises an error or receives Ctrl-C, roll back. A failure in step 9 prints a warning and does not roll back. Remove the stub and the pin. Reinstall the original, or, if the original was not installed, restore the link state of the substitute. Then exit with an error.
 
 Steps 1 to 6 change nothing except the install in step 5. A refusal in step 6 leaves the original in place and the substitute installed.
