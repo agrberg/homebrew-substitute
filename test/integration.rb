@@ -2,8 +2,8 @@
 # frozen_string_literal: true
 
 # Integration tests for `brew substitute`. They install and uninstall real formulae, so they run only in a
-# disposable Homebrew prefix: the sandbox in CLAUDE.md, or a CI runner. Run them through `brew ruby`, so that they
-# use Homebrew's Ruby:
+# disposable Homebrew prefix: the sandbox in CONTRIBUTING.md, or a CI runner. Run them through `brew ruby`, so that
+# they use Homebrew's Ruby:
 #
 #   HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 HOMEBREW_CACHE=<scratch>/cache HOMEBREW_LOGS=<scratch>/logs \
 #     <sandbox>/bin/brew ruby test/integration.rb

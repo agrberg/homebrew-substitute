@@ -225,7 +225,7 @@ The version check compares formula files. The stub points at the installed subst
 - A real bottle install of a new dependent. The sandbox cannot pour bottles.
 - A full cycle on the real install in which the original and the substitute both get a new version.
 - `brew doctor`.
-- Automated tests of the rollback paths and of Ctrl-C. These ran by hand. The test procedure is in `CLAUDE.md`.
+- Automated tests of the rollback paths and of Ctrl-C. These ran by hand. The test procedure is in `CONTRIBUTING.md`.
 - Casks. The commands handle formulae only.
 - A Homebrew older than the current one. The automated tests run on the current Homebrew only.
 - A library that a program opens at run time by path. The library check reads only load commands.
