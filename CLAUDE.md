@@ -11,6 +11,7 @@ A Homebrew tap with one Ruby external command, `brew substitute`. Read [ARCHITEC
 - `cmd/substitute.rb`: the command and all its modes. The file must stay executable (mode 755) in git.
 - `lib/substitution.rb`: the stub keg logic that both commands share.
 - `test/integration.rb`: the integration tests. They run in a throwaway Homebrew prefix.
+- `test/style.rb`: the style check. It runs RuboCop with Homebrew's rules on this checkout.
 - `.github/workflows/ci.yml`: the style check, and the integration tests on macOS and Linux.
 
 ## Rules for changes
@@ -29,12 +30,12 @@ A Homebrew tap with one Ruby external command, `brew substitute`. Read [ARCHITEC
 ## Lint
 
 ```sh
-brew style cmd/substitute.rb lib/substitution.rb
+brew ruby test/style.rb
 ```
 
-`brew style --fix` corrects most layout offenses. It also reflows lines, so read the result. `brew typecheck` does not cover taps.
+The script applies Homebrew's style rules to `cmd`, `lib` and `test` in this checkout, whether or not the tap is installed. Pass options and files after `--`, because `brew ruby` rejects them before it: `brew ruby test/style.rb -- --autocorrect-all`. The option fixes offenses. It reflows lines, so read the result. `brew typecheck` does not cover taps.
 
-If this tap is installed, `brew style` also reads the installed copy and reports `Lint/DuplicateMethods` and `Lint/ConstantReassignment` for every method and constant. Ignore those two cops, or skip them with `--except-cops Lint/DuplicateMethods,Lint/ConstantReassignment`. CI installs the tap too, so it skips them.
+`brew style` isolates a tap only under `Library/Taps`. A second copy of the code in the index changes the findings, and Homebrew scopes some rules to `Taps/...` paths. The script runs RuboCop from this directory and moves those paths here. It reads Homebrew's internals (`Library/.rubocop.yml` and `utils/rubocop.rb`), so the weekly CI run finds a Homebrew change that breaks it.
 
 ## Test procedure
 
