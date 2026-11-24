@@ -111,9 +111,15 @@ module Homebrew
         return ohai "No stale substitutions." if stale.empty?
 
         pairs = stale.map { |stub| [stub, Formulary.factory(stub.original), Formulary.factory(stub.substitute)] }
-        check_refreshable(pairs)
+        # Every read-only check runs before the first change, so one refusal leaves all stubs as they were.
+        pairs.each do |_stub, original, substitute|
+          check_compatible(original, substitute)
+          check_libraries(original, substitute, original.runtime_installed_formula_dependents,
+                          args.dry_run? ? "Would fail" : "Cannot refresh")
+        end
 
-        pairs.each do |stub, original, substitute|
+        # The checks above must all pass before the first change.
+        pairs.each do |stub, original, substitute| # rubocop:disable Style/CombinableLoops
           next ohai "Would re-point #{original.name} from #{stub.version} to #{original.pkg_version}" if args.dry_run?
 
           Substitution.remove(stub)
@@ -125,16 +131,6 @@ module Homebrew
             raise
           end
           ohai "Re-pointed #{original.name} to #{original.pkg_version}"
-        end
-      end
-
-      # Every read-only check runs before the first change, so one refusal leaves all stubs as they were.
-      sig { params(pairs: T::Array[[Substitution::Stub, Formula, Formula]]).void }
-      def check_refreshable(pairs)
-        pairs.each do |_stub, original, substitute|
-          check_compatible(original, substitute)
-          check_libraries(original, substitute, original.runtime_installed_formula_dependents,
-                          args.dry_run? ? "Would fail" : "Cannot refresh")
         end
       end
 
@@ -176,7 +172,23 @@ module Homebrew
         refuse_pinned(original)
         check_compatible(original, substitute)
         dependents = original.runtime_installed_formula_dependents
-        return preview(original, substitute, dependents) if args.dry_run?
+        if args.dry_run?
+          ohai "Would install #{substitute.name}" unless substitute.any_version_installed?
+          unless Substitution.real_kegs(original).empty?
+            ohai "Would uninstall #{original.name} with --ignore-dependencies"
+          end
+          ohai "Would create a stub keg for #{original.name} #{original.pkg_version} " \
+               "that points to #{substitute.name}"
+          ohai "Would pin #{original.name}"
+          ohai "Would link #{substitute.name}"
+          ohai "Would run `brew linkage --test` on the dependents of #{original.name}"
+          if substitute.any_version_installed?
+            check_libraries(original, substitute, dependents, "Would fail")
+          else
+            opoo "Cannot check the libraries of #{substitute.name} until it is installed."
+          end
+          return
+        end
 
         real_kegs = Substitution.real_kegs(original)
         original_linked = real_kegs.any?(&:linked?)
@@ -198,7 +210,8 @@ module Homebrew
 
           opoo "The linkage test failed. Rolling back."
         rescue StandardError, Interrupt => e
-          opoo "The substitution failed (#{e.message.strip.delete_suffix(".").presence || e.class}). Rolling back."
+          reason = e.message.strip.delete_suffix(".").presence || e.class
+          opoo "The substitution failed (#{reason}). Rolling back."
           roll_back(original, substitute, real_kegs, original_linked:, substitute_linked:)
           raise
         end
@@ -252,28 +265,6 @@ module Homebrew
           #{lines.join("\n")}
           Nothing was removed or replaced.
         EOS
-      end
-
-      sig { params(original: Formula, substitute: Formula, dependents: T::Array[Formula]).void }
-      def preview(original, substitute, dependents)
-        print_plan(original, substitute)
-        if substitute.any_version_installed?
-          check_libraries(original, substitute, dependents, "Would fail")
-        else
-          opoo "Cannot check the libraries of #{substitute.name} until it is installed."
-        end
-      end
-
-      sig { params(original: Formula, substitute: Formula).void }
-      def print_plan(original, substitute)
-        ohai "Would install #{substitute.name}" unless substitute.any_version_installed?
-        unless Substitution.real_kegs(original).empty?
-          ohai "Would uninstall #{original.name} with --ignore-dependencies"
-        end
-        ohai "Would create a stub keg for #{original.name} #{original.pkg_version} that points to #{substitute.name}"
-        ohai "Would pin #{original.name}"
-        ohai "Would link #{substitute.name}"
-        ohai "Would run `brew linkage --test` on the dependents of #{original.name}"
       end
 
       sig { params(substitute: Formula).void }

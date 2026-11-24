@@ -105,7 +105,8 @@ def brew!(*args)
 end
 
 def check(label, condition, detail = nil)
-  puts "  #{condition ? "ok  " : "FAIL"} #{label}"
+  status = condition ? "ok  " : "FAIL"
+  puts "  #{status} #{label}"
   return if condition
 
   puts detail.to_s.gsub(/^/, "         ") unless detail.to_s.empty?
@@ -145,12 +146,14 @@ end
 
 def formula_source(name, spec)
   archive = @archives.fetch(spec.fetch(:tarball))
+  class_name = name.split("-").map(&:capitalize).join
+  checksum = Digest::SHA256.file(archive).hexdigest
   lines = [
-    "class #{name.split("-").map(&:capitalize).join} < Formula",
+    "class #{class_name} < Formula",
     '  desc "Test fixture"',
     '  homepage "https://example.invalid"',
     %Q(  url "file://#{archive}"),
-    %Q(  sha256 "#{Digest::SHA256.file(archive).hexdigest}"),
+    %Q(  sha256 "#{checksum}"),
   ]
   lines << "  revision #{@revisions[name]}" if @revisions[name].positive?
   lines << "  keg_only :versioned_formula" if spec[:keg_only]
@@ -528,6 +531,32 @@ scenario "swap on the first developer command" do
   check "the notice does not appear", swap.output.exclude?("developer mode"), swap.output
 ensure
   system("git", "config", "--file", config, "homebrew.devcmdrun", "true") if config
+end
+
+scenario "library check on refresh" do
+  library = MACOS ? "libsublib.dylib" : "libsublib.so"
+  brew!("install", "sublib", "sublib-user", "sublib-full")
+  brew!("substitute", "sublib-good", "--for=sublib")
+
+  # The new revision of the substitute ships no library, so the refresh must refuse.
+  bump_revision("sublib")
+  @revisions["sublib-good"] += 1
+  no_library_spec = FORMULAE.fetch("sublib-full").merge(install: "bin.install \"subtest\" => \"sublib-good\"")
+  no_library = formula_source("sublib-good", no_library_spec)
+  File.write(File.join(PROBE_FORMULAE, "sublib-good.rb"), no_library)
+  brew!("upgrade", "sublib-good")
+  stale = snapshot
+
+  dry_run = brew("substitute", "--refresh", "--dry-run")
+  check_exit "--refresh --dry-run", dry_run, 1
+  check_output "--refresh --dry-run", dry_run, "Would fail"
+  check_unchanged "--refresh --dry-run", stale
+
+  refusal = brew("substitute", "--refresh")
+  check_exit "--refresh without the library", refusal, 1
+  check_output "--refresh without the library", refusal, "Cannot refresh"
+  check_output "--refresh without the library", refusal, library
+  check_unchanged "--refresh without the library", stale
 end
 
 tear_down

@@ -60,8 +60,9 @@ module Substitution
 
       current_version = Formulary.factory(stub.original).pkg_version.to_s
       return :stale if stub.version != current_version
+      return :behind if behind?(Formulary.factory(stub.substitute))
 
-      behind?(Formulary.factory(stub.substitute)) ? :behind : :ok
+      :ok
     rescue FormulaUnavailableError
       :unknown
     end
