@@ -202,7 +202,7 @@ The version check compares formula files. The stub points at the installed subst
 | Stale stub, then install a dependent | Brew prints the `brew unpin` error. After `brew substitute --refresh`, the install works. |
 | The original formula cannot load | Status `unknown`. `--refresh` skips the stub. |
 | The substitute formula file is gone, and the substitute is installed | Status `ok`. Brew loads the formula from the `.brew` directory of the installed keg. |
-| `--refresh`, the new substitute lacks a library (`--dry-run` and real run) | Refused with `Would fail` or `Cannot refresh` and the missing path. The state does not change. |
+| `--refresh`, the new substitute lacks a library (`--dry-run` and real run) | Refused with `Would fail` or `Cannot refresh` and the missing path. The state does not change. On Linux, Homebrew reports a library that is not on disk by its bare name, such as `libsublib.so`. The check tries that name against each rpath of the file. |
 | `--refresh`, `Substitution.create` raises after the old stub is removed | The message gives `brew substitute <substitute> --for=<original>`. That command creates the stub again. |
 | `Substitution.create` raises after the pin and the `opt` link exist | The stub, the pin and the `opt` link are gone. The state matches the state before the command. |
 | The reinstall of the original fails in the rollback of `swap` | The stub and the pin are gone, the substitute stays linked, and a message gives the install command. |

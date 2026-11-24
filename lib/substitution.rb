@@ -87,9 +87,7 @@ module Substitution
         keg = dependent.any_installed_keg
         next unless keg
 
-        names = keg.binary_executable_or_library_files.flat_map do |file|
-          file.dynamically_linked_libraries(except: :DYLIB_USE_WEAK_LINK)
-        end
+        names = keg.binary_executable_or_library_files.flat_map { |file| linked_names(file) }
         gone = names.uniq.filter_map { |name| substitute_path(original, substitute, name) }.reject(&:exist?)
         missing[dependent.name] = gone.map(&:to_s) unless gone.empty?
       end
@@ -180,6 +178,18 @@ module Substitution
     def discard(original, path)
       FormulaPin.new(original).unpin
       Keg.new(path).uninstall(raise_failures: true)
+    end
+
+    # On Linux, Homebrew returns a bare name such as `libfoo.so` when the library is not on disk.
+    # That happens when the stub points at a substitute that lost the library, so the name is
+    # tried against each rpath. Names that Homebrew did find stay as they are.
+    sig { params(file: T.untyped).returns(T::Array[String]) }
+    def linked_names(file)
+      file.dynamically_linked_libraries(except: :DYLIB_USE_WEAK_LINK).flat_map do |name|
+        next name if name.include?("/") || !file.respond_to?(:rpaths)
+
+        file.rpaths.map { |rpath| "#{rpath}/#{name}" }
+      end
     end
 
     # Maps a library name under the original (`opt/<original>/...` or
