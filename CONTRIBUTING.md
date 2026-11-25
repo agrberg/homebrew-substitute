@@ -1,6 +1,6 @@
 # Contributing
 
-Read [ARCHITECTURE.md](ARCHITECTURE.md) before you change behavior. Run `./bin/style` before you push. The integration tests below run in a separate Homebrew prefix.
+Read [ARCHITECTURE.md](ARCHITECTURE.md) before you change behavior. Run `./bin/style` before you push. The script runs the brew of the prefix that holds this checkout, so keep the checkout at `<sandbox>/Library/Taps/agrberg/homebrew-substitute`. The integration tests below run in a separate Homebrew prefix.
 
 ## Test procedure
 
@@ -33,7 +33,7 @@ HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 <sandbox>/bin/brew ruby test/integration.rb
 
 ## Set up for manual checks
 
-1. Symlink this repo into the sandbox: `ln -s <this repo> <sandbox>/Library/Taps/<user>/homebrew-substitute`.
+1. Clone this repo into the sandbox at `<sandbox>/Library/Taps/agrberg/homebrew-substitute`. Brew then finds it as the tap `agrberg/substitute`. Use `agrberg` for `<user>` in the steps below.
 2. Trust the command: `./bin/brew trust --command <user>/substitute/substitute`. Trust is global to the user, not per prefix.
 3. Create a throwaway tap with three formulae that install from a local `file://` tarball, and tap it with `./bin/brew tap <user>/probe <path>`. Run `./bin/brew trust <user>/probe`.
    - `foo`: the original.

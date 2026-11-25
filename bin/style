@@ -1,3 +1,9 @@
 #!/bin/sh
-# Without HOMEBREW_DEVELOPER, `brew ruby` turns developer mode on for good. This keeps it on for this run only.
-HOMEBREW_DEVELOPER=1 exec brew ruby "$(dirname "$0")/../test/style.rb" -- "$@"
+# `brew style` is a developer command. Without HOMEBREW_DEVELOPER, it turns developer mode on for good.
+# Homebrew checks a tap only under Library/Taps, so this runs the brew of the prefix that holds this checkout.
+brew="$(cd "$(dirname "$0")/../../../../.." && pwd -P)/bin/brew"
+if [ ! -x "$brew" ]; then
+  echo "$brew not found. Keep this checkout at <sandbox>/Library/Taps/agrberg/homebrew-substitute (see CONTRIBUTING.md)." >&2
+  exit 1
+fi
+HOMEBREW_DEVELOPER=1 exec "$brew" style agrberg/substitute "$@"

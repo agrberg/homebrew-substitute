@@ -11,8 +11,7 @@ A Homebrew tap with one Ruby external command, `brew substitute`. Read [ARCHITEC
 - `cmd/substitute.rb`: the command and all its modes. The file must stay executable (mode 755) in git.
 - `lib/substitution.rb`: the stub keg logic that both commands share.
 - `test/integration.rb`: the integration tests. They run in a throwaway Homebrew prefix.
-- `test/style.rb`: the style check. It runs RuboCop with Homebrew's rules on this checkout.
-- `bin/style`: runs `test/style.rb` with developer mode on for that run only. The file must stay executable (mode 755) in git.
+- `bin/style`: runs `brew style agrberg/substitute` with developer mode on for that run only. The file must stay executable (mode 755) in git.
 - `.github/workflows/ci.yml`: the style check, and the integration tests on macOS and Linux.
 
 ## Rules for changes
@@ -34,11 +33,11 @@ A Homebrew tap with one Ruby external command, `brew substitute`. Read [ARCHITEC
 ./bin/style
 ```
 
-The script applies Homebrew's style rules to `cmd`, `lib` and `test` in this checkout, whether or not the tap is installed. Pass options and files after the command: `./bin/style --autocorrect-all`. The option fixes offenses. It reflows lines, so read the result. `brew typecheck` does not cover taps.
+`brew style` applies the tap rules and isolates the tap only for a path under `Library/Taps`. This checkout lives at `<sandbox>/Library/Taps/agrberg/homebrew-substitute` (see [CONTRIBUTING.md](CONTRIBUTING.md)), and `./bin/style` runs the brew of that prefix. Pass options after the command: `./bin/style --fix`. The option fixes offenses. It reflows lines, so read the result. `brew typecheck` does not cover taps.
 
-`brew ruby test/style.rb` gives the same result, but `brew ruby` is a developer command: it turns developer mode on for good and prints a notice. `./bin/style` sets `HOMEBREW_DEVELOPER=1` for the run, so nothing stays on. CI sets the variable in the job environment and calls `brew ruby` directly.
+`brew style` is a developer command: without `HOMEBREW_DEVELOPER`, it turns developer mode on for good and prints a notice. `./bin/style` sets `HOMEBREW_DEVELOPER=1` for the run, so nothing stays on. CI sets the variable in the job environment and calls `brew style` directly.
 
-`brew style` isolates a tap only under `Library/Taps`. A second copy of the code in the index changes the findings, and Homebrew scopes some rules to `Taps/...` paths. The script runs RuboCop from this directory and moves those paths here. It reads Homebrew's internals (`Library/.rubocop.yml` and `utils/rubocop.rb`), so the weekly CI run finds a Homebrew change that breaks it.
+`Homebrew/SingleUseMethod` reports nothing for a symlinked tap until [Homebrew/brew#24773](https://github.com/Homebrew/brew/pull/24773) merges.
 
 ## Test procedure
 
