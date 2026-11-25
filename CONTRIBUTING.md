@@ -21,10 +21,11 @@ The sandbox shares `~/Library/Caches/Homebrew` and `~/Library/Logs/Homebrew` wit
 ## The integration tests
 
 ```sh
-HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 <sandbox>/bin/brew ruby test/integration.rb
+./bin/test
 ```
 
-- Set `HOMEBREW_CACHE` and `HOMEBREW_LOGS` first (see above). The script refuses to run with the default values.
+- `./bin/test` runs the brew of the prefix that holds this checkout. It sets `HOMEBREW_SUBSTITUTE_TEST_SANDBOX`, `HOMEBREW_NO_AUTO_UPDATE`, and `HOMEBREW_CACHE` and `HOMEBREW_LOGS` in `<sandbox>-scratch`. It refuses a default Homebrew prefix.
+- To run without the wrapper, set `HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1`, `HOMEBREW_CACHE` and `HOMEBREW_LOGS` (see above), and run `<sandbox>/bin/brew ruby test/integration.rb`. The script refuses to run with the default values.
 - The script builds its own tap `substitute-test/probe` and links this repo as `substitute-test/substitute`. It keeps its trust entries in a scratch `XDG_CONFIG_HOME`, and removes the taps and formulae at the end.
 - Name the variables `HOMEBREW_...`. Brew drops other variables before it runs the script. `HOMEBREW_SUBSTITUTE_TEST_ONLY=<text>` runs only the scenarios whose name contains the text.
 - `brew ruby` turns on developer mode, and the `brew substitute` list and `--refresh` read every stub in the prefix. A sandbox with stubs from older tests makes the scenarios fail. Use a fresh clone.

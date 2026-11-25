@@ -12,6 +12,7 @@ A Homebrew tap with one Ruby external command, `brew substitute`. Read [ARCHITEC
 - `lib/substitution.rb`: the stub keg logic that both commands share.
 - `test/integration.rb`: the integration tests. They run in a throwaway Homebrew prefix.
 - `bin/style`: runs `brew style agrberg/substitute` with developer mode on for that run only. The file must stay executable (mode 755) in git.
+- `bin/test`: runs `test/integration.rb` with the sandbox brew, and refuses a default Homebrew prefix. The file must stay executable (mode 755) in git.
 - `.github/workflows/ci.yml`: the style check, and the integration tests on macOS and Linux.
 
 ## Rules for changes
