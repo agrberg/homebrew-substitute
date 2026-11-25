@@ -24,17 +24,17 @@ jobs:
         with:
           persist-credentials: false
       - run: brew config
-      - run: brew ruby test/style.rb
+      - run: brew style agrberg/substitute
       - name: Check that the style check fails on an offense
         run: |
           printf "puts   %s\n" "\"canary\"" > lib/canary.rb
-          if output=$(brew ruby test/style.rb -- lib/canary.rb 2>&1); then
+          if output=$(brew style agrberg/substitute 2>&1); then
             echo "$output"
             echo "The style check passed a file with offenses."
             exit 1
           fi
           echo "$output"
-          echo "$output" | grep -q "lib/canary.rb:" || { echo "The style check failed for another reason."; exit 1; }
+          grep -q "lib/canary.rb" <<<"$output" || { echo "The style check failed for another reason."; exit 1; }
 
   integration:
     name: integration (${{ matrix.os }})

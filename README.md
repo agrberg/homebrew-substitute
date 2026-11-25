@@ -89,8 +89,7 @@ The integration tests install and uninstall formulae. Run them only in a throwaw
 
 ```sh
 ./bin/style
-HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 HOMEBREW_CACHE=<scratch>/cache HOMEBREW_LOGS=<scratch>/logs \
-  <sandbox>/bin/brew ruby test/integration.rb
+./bin/test
 ```
 
 ## More

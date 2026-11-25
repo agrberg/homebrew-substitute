@@ -1,0 +1,21 @@
+#!/bin/sh
+# The integration tests install and uninstall formulae, so this runs them only in a sandbox prefix: the one that
+# holds this checkout. It sets the flag and the cache and log directories that the tests require.
+checkout="$(cd "$(dirname "$0")/.." && pwd -P)"
+sandbox="$(cd "$checkout/../../../.." && pwd -P)"
+brew="$sandbox/bin/brew"
+if [ ! -x "$brew" ]; then
+  echo "$brew not found. Keep this checkout at <sandbox>/Library/Taps/agrberg/homebrew-substitute (see CONTRIBUTING.md)." >&2
+  exit 1
+fi
+case "$sandbox" in
+  /opt/homebrew | /usr/local/Homebrew | /home/linuxbrew/.linuxbrew/Homebrew)
+    echo "$sandbox is a default Homebrew prefix, and the tests uninstall formulae. Use a sandbox (see CONTRIBUTING.md)." >&2
+    exit 1
+    ;;
+esac
+scratch="$sandbox-scratch"
+mkdir -p "$scratch"
+export HOMEBREW_CACHE="${HOMEBREW_CACHE:-$scratch/cache}" HOMEBREW_LOGS="${HOMEBREW_LOGS:-$scratch/logs}"
+export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1
+exec "$brew" ruby "$checkout/test/integration.rb" "$@"
