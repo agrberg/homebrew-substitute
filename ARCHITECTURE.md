@@ -174,6 +174,13 @@ The version check compares formula files. The stub points at the installed subst
 3. Remove the stub and the pin.
 4. Unless `--no-install` is set, reinstall the original and restore the link states.
 
+## The test prefix
+
+The command changes the Cellar, the `opt` links and the pins of a Homebrew prefix. The tests therefore run in their own prefix, a clone of Homebrew/brew that holds this repository as the tap `agrberg/substitute`. [CONTRIBUTING.md](CONTRIBUTING.md#the-sandbox) gives the steps to make it, and lists [what the tests change in it](CONTRIBUTING.md#what-the-tests-change-in-the-sandbox).
+
+- `bin/test` runs the script through `brew ruby`, so that the script uses Homebrew's Ruby and the internals that the command uses.
+- CI has no sandbox. The `setup-homebrew` action installs Homebrew on the runner, and the checkout of this repository becomes the tap `agrberg/substitute`. The script trusts that copy, and aborts if another tap provides a different `brew substitute`.
+
 ## Verification record
 
 `test/integration.rb` runs the checks marked "automated" in a separate Homebrew prefix with throwaway source-built formulae. CI runs it on macOS and Linux. The other checks ran by hand in such a prefix, and on one real install.

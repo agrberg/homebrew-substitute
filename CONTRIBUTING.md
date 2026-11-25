@@ -1,22 +1,42 @@
 # Contributing
 
-Read [ARCHITECTURE.md](ARCHITECTURE.md) before you change behavior. Run `./bin/style` before you push. The script runs the brew of the prefix that holds this checkout, so keep the checkout at `<sandbox>/Library/Taps/agrberg/homebrew-substitute`. The integration tests below run in a separate Homebrew prefix.
+Read [ARCHITECTURE.md](ARCHITECTURE.md) before you change behavior. Run `./bin/style` before you push. Run `./bin/test` when you change behavior. Both scripts use the sandbox that holds this checkout (see below). They fail if the checkout is anywhere else.
 
 ## Test procedure
 
-`test/integration.rb` runs most checks. A few checks (rollback and Ctrl-C) are manual. Run both in a separate Homebrew prefix. Do not test on the user's real install without their approval.
+`test/integration.rb` runs most checks. A few checks (rollback and Ctrl-C) are manual. Run both in the sandbox. Do not test on the user's real install without their approval.
 
 ## The sandbox
 
-A checkout of Homebrew/brew is a complete prefix. Running `./bin/brew` inside it uses `Cellar`, `opt`, `var` and `Library/Taps` in that checkout, and git ignores them. Clone Homebrew/brew to make one. Do not put it under `/tmp`: brew refuses a prefix in its temporary directory.
+A checkout of Homebrew/brew is a complete prefix. Running `./bin/brew` inside it uses `Cellar`, `opt`, `var` and `Library/Taps` in that checkout, and git ignores them. Do not put it under `/tmp`: brew refuses a prefix in its temporary directory. A prefix at this path is a [Tier 3 configuration](https://github.com/Homebrew/brew/blob/HEAD/docs/Support-Tiers.md#tier-3), so use it only to develop and test this tap.
 
-Before any command in the sandbox, set the cache and log directories to a scratch location:
+This checkout must be a tap inside the sandbox. Brew then finds it as the tap `agrberg/substitute`. To make the sandbox, clone both repositories:
 
 ```sh
-export HOMEBREW_CACHE=<scratch>/cache HOMEBREW_LOGS=<scratch>/logs HOMEBREW_NO_AUTO_UPDATE=1
+git clone https://github.com/Homebrew/brew <sandbox>
+mkdir -p <sandbox>/Library/Taps/agrberg
+git clone <url of this repository> <sandbox>/Library/Taps/agrberg/homebrew-substitute
+```
+
+Work from `<sandbox>/Library/Taps/agrberg/homebrew-substitute`. Use a branch there. Do not use a `git worktree` for code changes: `./bin/style` and `./bin/test` look for `bin/brew` in the sandbox at that path, so they fail in a worktree.
+
+`./bin/test` keeps its cache and log directories in `<sandbox>/cache` and `<sandbox>/logs`, which git ignores, unless you already exported `HOMEBREW_CACHE` or `HOMEBREW_LOGS`. Before any other command in the sandbox, set the same variables:
+
+```sh
+export HOMEBREW_CACHE=<sandbox>/cache HOMEBREW_LOGS=<sandbox>/logs HOMEBREW_NO_AUTO_UPDATE=1
 ```
 
 The sandbox shares `~/Library/Caches/Homebrew` and `~/Library/Logs/Homebrew` with the real install. A `brew cleanup --prune=all` in a sandbox without these variables once deleted 450 real cache and log files. Read a dry run before you run the real command, and never chain them.
+
+### What the tests change in the sandbox
+
+The tests change the prefix, so use a sandbox that holds nothing that you need.
+
+- They install and uninstall formulae.
+- They move `Cellar` aside for a short time, and change `homebrew.devcmdrun` in the `.git/config` of the sandbox.
+- They tap `substitute-test/probe`, and link this checkout as the tap `substitute-test/substitute`. They keep the trust entries in a scratch `XDG_CONFIG_HOME`, and remove the taps and formulae at the end.
+- Each run first untaps `substitute-test/probe`. Run one test run at a time in a sandbox. A second run breaks the first.
+- The tests stop with an error if another tap provides a different `brew substitute`. Untap that tap.
 
 ## The integration tests
 
@@ -24,9 +44,8 @@ The sandbox shares `~/Library/Caches/Homebrew` and `~/Library/Logs/Homebrew` wit
 ./bin/test
 ```
 
-- `./bin/test` runs the brew of the prefix that holds this checkout. It sets `HOMEBREW_SUBSTITUTE_TEST_SANDBOX`, `HOMEBREW_NO_AUTO_UPDATE`, and `HOMEBREW_CACHE` and `HOMEBREW_LOGS` in `<sandbox>-scratch`. It refuses a default Homebrew prefix.
+- `./bin/test` runs the brew of the prefix that holds this checkout. It sets `HOMEBREW_SUBSTITUTE_TEST_SANDBOX`, `HOMEBREW_NO_AUTO_UPDATE`, and `HOMEBREW_CACHE` and `HOMEBREW_LOGS` in the sandbox. It refuses a default Homebrew prefix.
 - To run without the wrapper, set `HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1`, `HOMEBREW_CACHE` and `HOMEBREW_LOGS` (see above), and run `<sandbox>/bin/brew ruby test/integration.rb`. The script refuses to run with the default values.
-- The script builds its own tap `substitute-test/probe` and links this repo as `substitute-test/substitute`. It keeps its trust entries in a scratch `XDG_CONFIG_HOME`, and removes the taps and formulae at the end.
 - Name the variables `HOMEBREW_...`. Brew drops other variables before it runs the script. `HOMEBREW_SUBSTITUTE_TEST_ONLY=<text>` runs only the scenarios whose name contains the text.
 - `brew ruby` turns on developer mode, and the `brew substitute` list and `--refresh` read every stub in the prefix. A sandbox with stubs from older tests makes the scenarios fail. Use a fresh clone.
 - Each scenario takes a snapshot of the test formulae in the prefix before a refused command and compares it afterward. Add a snapshot check to every new refusal.
@@ -34,7 +53,7 @@ The sandbox shares `~/Library/Caches/Homebrew` and `~/Library/Logs/Homebrew` wit
 
 ## Set up for manual checks
 
-1. Clone this repo into the sandbox at `<sandbox>/Library/Taps/agrberg/homebrew-substitute`. Brew then finds it as the tap `agrberg/substitute`. Use `agrberg` for `<user>` in the steps below.
+1. Make the sandbox as described above. Use `agrberg` for `<user>` in the steps below.
 2. Trust the command: `./bin/brew trust --command <user>/substitute/substitute`. Trust is global to the user, not per prefix.
 3. Create a throwaway tap with three formulae that install from a local `file://` tarball, and tap it with `./bin/brew tap <user>/probe <path>`. Run `./bin/brew trust <user>/probe`.
    - `foo`: the original.

@@ -14,8 +14,6 @@ case "$sandbox" in
     exit 1
     ;;
 esac
-scratch="$sandbox-scratch"
-mkdir -p "$scratch"
-export HOMEBREW_CACHE="${HOMEBREW_CACHE:-$scratch/cache}" HOMEBREW_LOGS="${HOMEBREW_LOGS:-$scratch/logs}"
+export HOMEBREW_CACHE="${HOMEBREW_CACHE:-$sandbox/cache}" HOMEBREW_LOGS="${HOMEBREW_LOGS:-$sandbox/logs}"
 export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1
 exec "$brew" ruby "$checkout/test/integration.rb" "$@"

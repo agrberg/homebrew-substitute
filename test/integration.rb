@@ -5,7 +5,7 @@
 # disposable Homebrew prefix: the sandbox in CONTRIBUTING.md, or a CI runner. Run them through `brew ruby`, so that
 # they use Homebrew's Ruby:
 #
-#   HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 HOMEBREW_CACHE=<scratch>/cache HOMEBREW_LOGS=<scratch>/logs \
+#   HOMEBREW_SUBSTITUTE_TEST_SANDBOX=1 HOMEBREW_CACHE=<sandbox>/cache HOMEBREW_LOGS=<sandbox>/logs \
 #     <sandbox>/bin/brew ruby test/integration.rb
 #
 # HOMEBREW_SUBSTITUTE_TEST_ONLY=<text> runs only the scenarios whose name contains the text.
@@ -21,8 +21,8 @@ if ENV["HOMEBREW_SUBSTITUTE_TEST_SANDBOX"] != "1"
         "is disposable."
 end
 if ENV["HOMEBREW_CACHE"] == ENV["HOMEBREW_DEFAULT_CACHE"] || ENV["HOMEBREW_LOGS"] == ENV["HOMEBREW_DEFAULT_LOGS"]
-  abort "Set HOMEBREW_CACHE and HOMEBREW_LOGS to a scratch directory. A sandbox shares the default ones with the " \
-        "real install."
+  abort "Set HOMEBREW_CACHE and HOMEBREW_LOGS to directories inside the sandbox. A sandbox shares the default " \
+        "ones with the real install."
 end
 
 REPO = File.expand_path("..", __dir__).freeze

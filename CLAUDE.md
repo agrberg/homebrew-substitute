@@ -27,6 +27,7 @@ A Homebrew tap with one Ruby external command, `brew substitute`. Read [ARCHITEC
 - When behavior changes, add or change a scenario in `test/integration.rb`, and update the verification record in ARCHITECTURE.md and the examples in README.md.
 - Commit with explicit paths. Do not use `git add -A`.
 - Work on a branch and merge through a pull request. Do not commit to `main`. Name branches `ar/<short-description>` in lowercase.
+- Run `./bin/style` and `./bin/test` only from the checkout at `<sandbox>/Library/Taps/agrberg/homebrew-substitute`. Both fail in a git worktree, so use a worktree for documentation changes only. Run one test run at a time (see [CONTRIBUTING.md](CONTRIBUTING.md#what-the-tests-change-in-the-sandbox)).
 
 ## Lint
 
@@ -38,7 +39,7 @@ A Homebrew tap with one Ruby external command, `brew substitute`. Read [ARCHITEC
 
 `brew style` is a developer command: without `HOMEBREW_DEVELOPER`, it turns developer mode on for good and prints a notice. `./bin/style` sets `HOMEBREW_DEVELOPER=1` for the run, so nothing stays on. CI sets the variable in the job environment and calls `brew style` directly.
 
-`Homebrew/SingleUseMethod` reports nothing for a symlinked tap until [Homebrew/brew#24773](https://github.com/Homebrew/brew/pull/24773) merges.
+`Homebrew/SingleUseMethod` reports nothing for a symlinked tap until [Homebrew/brew#24779](https://github.com/Homebrew/brew/pull/24779) merges.
 
 ## Test procedure
 
